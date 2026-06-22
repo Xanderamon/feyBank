@@ -1,0 +1,30 @@
+# Secrets
+.env
+*.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/*.tfvars
+
+# Ansible
+ansible/*.retry
+ansible/group_vars/vault.yml
+
+# Docker local data (defensive)
+docker/data/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+*.swp
