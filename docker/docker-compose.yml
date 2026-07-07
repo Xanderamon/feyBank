@@ -1,0 +1,87 @@
+services:
+
+  app:
+    build:
+      context: ../app
+      dockerfile: Dockerfile
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    env_file:
+      - ../.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - feybank
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    env_file:
+      - ../.env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - feybank
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - feybank
+    restart: unless-stopped
+
+  seeder:
+    build:
+      context: ../app
+      dockerfile: Dockerfile
+    command: python3 seeder.py
+    env_file:
+      - ../.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - feybank
+    restart: "no"
+
+  load-generator:
+    build:
+      context: ../services/load-generator
+    env_file:
+      - ../.env
+    environment:
+      TARGET_URL: http://app:8000
+      REQUESTS_PER_MINUTE: "60"
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - feybank
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  feybank:
+    driver: bridge

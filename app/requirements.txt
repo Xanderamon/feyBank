@@ -1,0 +1,10 @@
+fastapi[all]
+alembic
+psycopg2
+databases[postgresql]
+asyncpg
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+sqlalchemy-utils
+prometheus-fastapi-instrumentator
