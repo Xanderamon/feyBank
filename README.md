@@ -88,7 +88,10 @@ Request rate is configurable via environment variable — no code change require
 
 ## How to Run
 
-**Prerequisites:** Docker + Docker Compose on the server. Tailscale active on both nodes.
+**Prerequisites (verified on Alma, 2026-07-10):**
+- systemd enabled (`/etc/wsl.conf`, `systemd=true`)
+- Docker CE + Compose plugin installed and running
+- Git installed, GitHub SSH auth configured
 
 ```bash
 git clone git@github.com:<user>/feyBank.git

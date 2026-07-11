@@ -109,7 +109,7 @@ Details: defined in Layer 4 (Configuration Management).
 | Constraint | Impact | Mitigation |
 | --- | --- | --- |
 | WSL2 IP changes on Windows reboot | Container and SSH endpoints may shift | /etc/hosts entry or static binding (Layer 1) |
-| Alma Linux WSL2: systemd disabled by default | Services relying on systemd (Ollama in Layer 6) will fail | systemd=true in /etc/wsl.conf — required before Layer 6 |
+| Alma Linux WSL2: systemd disabled by default | Services relying on systemd (Ollama in Layer 6) will fail | systemd=true in /etc/wsl.conf — **Resolved** |
 | Docker bridge networking on WSL2 | Container-to-container communication may fail on first attempt | Expected debug — not a blocker |
 
 ---
@@ -128,5 +128,14 @@ The following components are explicitly **out of scope for Layer 0** and will be
 - Terraform / cloud (Layer 8)
 
 ---
+
+## 6. Layer 0 — Environment Provisioning Log
+
+| Date | Item | Detail |
+| --- | --- | --- |
+| 2026-07-10 | systemd | `systemd=true` set in `/etc/wsl.conf` on Alma; verified via `ps -p 1` (systemd as PID 1) |
+| 2026-07-10 | Docker | Docker CE + Compose plugin installed via official repo; `docker compose version` confirmed |
+| 2026-07-10 | Git | Installed via `dnf`; repo cloned via SSH |
+| 2026-07-10 | GitHub SSH auth | Dedicated ed25519 key generated on Alma, added to GitHub account; verified via `ssh -T git@github.com` |
 
 *Next: `RUNBOOK.md` Layer 0 — document first incident before layer is considered complete.*
