@@ -54,7 +54,7 @@ services:
     build:
       context: ../app
       dockerfile: Dockerfile
-    command: python3 seeder.py
+    command: python3 -m app.seeder
     env_file:
       - ../.env
     depends_on:
