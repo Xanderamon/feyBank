@@ -5,6 +5,7 @@ databases[postgresql]
 asyncpg
 python-jose[cryptography]
 passlib[bcrypt]
+bcrypt<4.0
 python-multipart
 sqlalchemy>=1.4,<2.0
 sqlalchemy-utils

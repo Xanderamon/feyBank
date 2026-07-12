@@ -179,3 +179,25 @@ An ORM's `create_all()` (or equivalent schema-sync call) only creates tables for
 **Open follow-up (not yet resolved):** the FastAPI `app` process has the same latent exposure — it never imports the model modules directly, so its tables may also not exist yet. This hasn't surfaced because no implemented endpoint queries the database yet. Expect this same symptom pattern when `POST /accounts` and similar endpoints are implemented, unless addressed first.
 
 **Generalizes to:** any "table doesn't exist despite `create_all()` being called somewhere in the code" — check whether model class definitions are guaranteed to execute *before* the `create_all()` call, not just present anywhere in the import graph.
+
+---
+
+### Incident 008 — Custom `metadata` injection via `declared_attr` silently ignored
+
+**Category:** `application / ORM declarative configuration`
+
+**Symptom pattern:** `UndefinedTable` persists even after calling `create_all()` at the correct point in the import order (i.e. after model classes are imported) — the fix for "import ordering" (Incident 007) does not resolve the issue.
+
+**Problem:**
+Explicitly re-invoking `create_all()` after importing all model classes still does not create any tables, and raises no error — implying `create_all()` believes there is nothing to create.
+
+**Diagnosis:**
+The declarative base class overrides `metadata` via `@declared_attr`, intending to make all mapped classes share one specific `MetaData` instance (imported from a lower-level module). `@declared_attr` is designed for evaluation on *subclasses* of a declarative base, not necessarily on the base class's own `metadata` attribute during its own construction — this override may silently fail to apply, causing SQLAlchemy to fall back to an internally-created default `MetaData()`, invisible to the object being explicitly imported and passed to `create_all()` elsewhere.
+
+**Fix:**
+Do not rely on importing the "intended" shared `metadata` object from a separate module. Import the declarative `Base` class instead, and call `Base.metadata.create_all(engine)` — this is always the actual metadata object associated with the mapped classes, regardless of how it was assigned internally.
+
+**Lessons Learned:**
+When a custom object is "injected" into a class via an unusual or non-standard use of a framework mechanism (here: `declared_attr` for `metadata`, a non-typical use case), don't assume the injection succeeded just because no error was raised. Silent no-ops (as opposed to loud failures) are the most dangerous category of bug precisely because nothing signals that the assumption was wrong. When in doubt, query the framework's own authoritative object (`Base.metadata`) instead of a hand-wired reference to what you believe that object should be.
+
+**Generalizes to:** any case where a "shared singleton" object is imported from one place and passed into a framework call (e.g. `create_all`, `Base.query`, a registry), while the actual registration seems to happen "somewhere else" (declarative class bodies, decorators, metaclasses) — verify the two are actually the same object before trusting silent success.
