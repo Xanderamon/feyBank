@@ -7,7 +7,7 @@ container (e.g. on every `docker compose up`) does not duplicate rows.
 import random
 from decimal import Decimal
 
-from .db import LocalSession
+from .db import LocalSession, metadata, engine
 from .auth.models import User, Account, Transaction
 from .auth.enums import (
     Currency,
@@ -83,6 +83,13 @@ def _seed_transactions(db, accounts):
 
 
 def seeder():
+    # `db.py` runs metadata.create_all(engine) at import time, before the
+    # model classes below are registered on `metadata` — so tables don't
+    # exist yet at that point. Re-running create_all here, now that the
+    # models are imported and registered, creates whatever is still missing.
+    # Safe to call repeatedly: create_all only creates tables that don't exist.
+    metadata.create_all(engine)
+
     db = LocalSession()
     try:
         already_seeded = db.query(User).first() is not None
