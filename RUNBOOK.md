@@ -133,3 +133,25 @@ Adjust the Dockerfile to `COPY` the source into a subdirectory matching the pack
 When a container using relative imports crashes with `ModuleNotFoundError` or `ImportError: attempted relative import`, check whether the Dockerfile's `COPY`/`WORKDIR` structure matches the package name the run command expects — before touching any application code. This is a packaging problem, not a code bug, and should be fixed at the Dockerfile/compose layer.
 
 **Generalizes to:** any Python service failing on startup with either of the two symptom patterns above — first check `docker compose exec <service> ls` and `pwd` to confirm the on-disk structure matches what the run command expects.
+
+---
+
+### Incident 006 — Unpinned dependency breaks on major version upgrade
+
+**Category:** `application / dependency versioning`
+
+**Symptom pattern:** library raises an error referencing a "new" API concept, decorator, or annotation style the application code doesn't use (e.g. `MappedAnnotationError`, "Annotated Declarative Table form", or similar version-specific ORM/framework terminology)
+
+**Problem:**
+A container crashes at import/class-definition time — not at request-handling time — with an error message referencing concepts or requirements that seem unrelated to what the code was actually written to use.
+
+**Diagnosis:**
+The failing library (here, SQLAlchemy) is a transitive dependency, pulled in without an explicit version pin in `requirements.txt`. The application code was written against an older major version's API/behavior; `pip install` resolved the latest available major version instead, which introduced breaking behavioral changes (not just new features) affecting code that was previously valid.
+
+**Fix:**
+Pin the affected library to the major version range the code was actually written for (e.g. `sqlalchemy>=1.4,<2.0`), rather than modifying application code to match the new major version's API — unless a deliberate migration to the new API is intended.
+
+**Lessons Learned:**
+Any dependency not explicitly pinned in `requirements.txt` is a moving target — a rebuild months apart can silently resolve a different major version and break code that hasn't changed at all. Errors that reference unfamiliar terminology from a well-known library (rather than an obvious typo or missing file) are a strong signal to check for an unpinned transitive dependency before assuming the application code itself is wrong.
+
+**Generalizes to:** any "it worked before, now it doesn't, and I didn't touch the code" scenario — check `pip list` / `requirements.txt` for missing version constraints before debugging application logic.
