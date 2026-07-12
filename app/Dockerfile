@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y \
     netcat-traditional \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt app/requirements.txt
+COPY requirements.txt requirements-lock.txt app/
 # install pipenv and project dependencies
-RUN pip install -r app/requirements.txt
+RUN pip install -r app/requirements-lock.txt
 COPY . app/

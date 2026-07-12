@@ -201,3 +201,47 @@ Do not rely on importing the "intended" shared `metadata` object from a separate
 When a custom object is "injected" into a class via an unusual or non-standard use of a framework mechanism (here: `declared_attr` for `metadata`, a non-typical use case), don't assume the injection succeeded just because no error was raised. Silent no-ops (as opposed to loud failures) are the most dangerous category of bug precisely because nothing signals that the assumption was wrong. When in doubt, query the framework's own authoritative object (`Base.metadata`) instead of a hand-wired reference to what you believe that object should be.
 
 **Generalizes to:** any case where a "shared singleton" object is imported from one place and passed into a framework call (e.g. `create_all`, `Base.query`, a registry), while the actual registration seems to happen "somewhere else" (declarative class bodies, decorators, metaclasses) — verify the two are actually the same object before trusting silent success.
+
+---
+
+### Incident 009 — passlib/bcrypt version incompatibility (unpinned dependency)
+
+**Category:** `application / dependency versioning`
+
+**Symptom pattern:** `AttributeError: module 'bcrypt' has no attribute '__about__'` followed by `ValueError: password cannot be longer than 72 bytes` — the error appears to be about password length, but occurs during a library's internal self-test, not from the actual password being hashed.
+
+**Problem:**
+Password hashing fails with an error that superficially suggests the input password is too long, even when it clearly isn't (e.g. a 12-character test password).
+
+**Diagnosis:**
+`passlib` probes the installed `bcrypt` library's version via an internal attribute (`bcrypt.__about__.__version__`) to select compatible behavior. Newer major versions of `bcrypt` removed that attribute. When version detection fails, passlib falls back to running an internal diagnostic ("wrap bug detection") using a hardcoded test string — and it is *that* internal test hash, not the caller's actual password, which trips the length-related `ValueError` under the newer bcrypt version's stricter behavior. `bcrypt` was pulled in without a version pin, so a new major version was installed silently.
+
+**Fix:**
+Pin `bcrypt<4.0` in `requirements.txt` (alongside the existing `passlib[bcrypt]` declaration), rather than modifying the password-hashing code — the error is not about actual input, so no application logic needs to change.
+
+**Lessons Learned:**
+Same root pattern as Incident 006: unpinned transitive dependencies silently resolve to newer major versions, which can break glue-libraries (like passlib) that assume specific internal APIs of what they wrap. A second signal worth remembering here: error messages from a lower-level self-test can look identical in shape to an error about *your* input — check whether the failing value in the traceback is actually the data you passed in, or a hardcoded value belonging to the library's own internals, before assuming the input is the problem.
+
+**Generalizes to:** any error suggesting your input is invalid, when the input demonstrably isn't (length, format, type) — check if the failure originates from a library-internal self-test/probe rather than from processing the actual argument you passed.
+
+---
+
+### Incident 010 — Divergent images across services after partial rebuilds
+
+**Category:** `operations / build process`
+
+**Symptom pattern:** the same dependency fix appears to work in one service (verified via logs or direct testing) but the identical error persists when testing the same code path in a different service sharing the same `requirements.txt` / build context
+
+**Problem:**
+A dependency fix (version pin) is confirmed working in one container, but a sibling service using the same source and requirements file still exhibits the original bug.
+
+**Diagnosis:**
+`docker compose build <service>` / `up --build <service>` only rebuilds the named service(s). If a requirements change was made and only one service was rebuilt to verify the fix, other services sharing the same Dockerfile/context remain on the older image — with the old, unpinned dependency version still installed — until explicitly rebuilt themselves.
+
+**Fix:**
+Run `docker compose up -d --build` without naming a specific service, to rebuild every service with a `build:` directive, after any change to shared source or requirements files. Verify via `docker compose exec <service> pip freeze | grep <package>` on *each* affected service, not just the one initially tested.
+
+**Lessons Learned:**
+A fix confirmed in one container is not confirmed project-wide. When multiple services share a build context or requirements file, always rebuild and re-verify all of them together after a dependency change — testing only the service you happen to be iterating on can create a false sense of resolution while a sibling service silently still carries the bug.
+
+**Generalizes to:** any "it works here but not there" report between two services/containers that are supposed to be built from the same source — check whether both were actually rebuilt after the fix, before investigating the code itself again.
