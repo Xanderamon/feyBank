@@ -155,3 +155,27 @@ Pin the affected library to the major version range the code was actually writte
 Any dependency not explicitly pinned in `requirements.txt` is a moving target — a rebuild months apart can silently resolve a different major version and break code that hasn't changed at all. Errors that reference unfamiliar terminology from a well-known library (rather than an obvious typo or missing file) are a strong signal to check for an unpinned transitive dependency before assuming the application code itself is wrong.
 
 **Generalizes to:** any "it worked before, now it doesn't, and I didn't touch the code" scenario — check `pip list` / `requirements.txt` for missing version constraints before debugging application logic.
+
+---
+
+### Incident 007 — ORM tables never created (metadata populated after create_all runs)
+
+**Category:** `application / import ordering, ORM initialization`
+
+**Symptom pattern:** `psycopg2.errors.UndefinedTable: relation "<table>" does not exist`, raised from a query against a model class that is clearly defined in the codebase
+
+**Problem:**
+A query against an ORM model fails because its underlying table was never created in the database — despite `metadata.create_all(engine)` being present in the codebase and apparently having run without error.
+
+**Diagnosis:**
+`create_all()` was called at module import time, in a module (`db.py`) that is a dependency of the model-defining modules rather than the other way around. Because of that import direction, `create_all()` always executes before the ORM model classes are defined and registered onto the shared `metadata` object — so at the moment `create_all()` runs, there is nothing yet to create. No error is raised at that point; the call simply does nothing, silently.
+
+**Fix:**
+Explicitly call `metadata.create_all(engine)` again, later, after the model modules have been imported (and thus registered) — e.g. at the start of any script or service entrypoint that needs the tables to exist. `create_all()` is idempotent and safe to call more than once.
+
+**Lessons Learned:**
+An ORM's `create_all()` (or equivalent schema-sync call) only creates tables for models that have been imported and registered by the time it runs — not all models that exist in the codebase. If `create_all()` lives in a low-level module that model modules depend on (rather than the reverse), it will structurally always run too early. This is easy to miss because it fails silently (no tables, no error) until something actually queries the missing table.
+
+**Open follow-up (not yet resolved):** the FastAPI `app` process has the same latent exposure — it never imports the model modules directly, so its tables may also not exist yet. This hasn't surfaced because no implemented endpoint queries the database yet. Expect this same symptom pattern when `POST /accounts` and similar endpoints are implemented, unless addressed first.
+
+**Generalizes to:** any "table doesn't exist despite `create_all()` being called somewhere in the code" — check whether model class definitions are guaranteed to execute *before* the `create_all()` call, not just present anywhere in the import graph.
