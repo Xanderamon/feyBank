@@ -28,3 +28,10 @@ docker/data/
 Thumbs.db
 .vscode/
 *.swp
+customers.json
+
+# Repomix
+repomix-*
+
+# VSCode (?)
+*.code-workspace
